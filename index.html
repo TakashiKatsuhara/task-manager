@@ -400,7 +400,10 @@
     <button class="chip" data-view="gantt" onclick="setView(this)">📊 ガント</button>
     <button class="chip" data-view="notes" onclick="setView(this)">📝 メモ</button>
   </div>
-  <input id="searchBox" type="text" placeholder="🔍 検索" oninput="render()">
+  <div class="seg">
+    <button class="chip" onclick="render()" title="いつ→優先→担当→タイトル順に並べ替え">⇅ 並べ替え</button>
+  </div>
+  <input id="searchBox" type="text" placeholder="🔍 検索" oninput="render(true)">
 </div>
 
 <main>
@@ -725,6 +728,7 @@ let calMonth = null;
 let currentView = 'list';
 let quickDraft = { doDate: '', startDate: '', endDate: '', priority: '', title: '', assignee: '', memo: '', effort: '' };
 let lastEditedId = null;
+let orderCache = []; // 前回表示時の並び順（インライン編集中は行を動かさないために保持）
 let appNotes = { morning: '', evening: '', other: '', updatedAt: null };
 const NOTE_FIELDS = { morning: 'note_morning', evening: 'note_evening', other: 'note_other' };
 const LS_NOTES = 'tm_notes';
@@ -865,9 +869,8 @@ function updateField(id, field, value){
   if(field === 'title' && !String(value).trim()) return render();
   t[field] = typeof value === 'string' && field !== 'memo' ? value.trim() : value;
   t.updatedAt = nowIso();
-  lastEditedId = id;
   markDirty();
-  render();
+  render(true); // インライン編集では並び順を維持
 }
 
 /* ================= 描画 ================= */
@@ -896,7 +899,7 @@ function rowClass(t){
   return '';
 }
 
-function visibleTasks(){
+function visibleTasks(preserveOrder){
   const q = $('searchBox').value.trim().toLowerCase();
   const today = todayStr();
   let list = tasks.filter(t => !t.deleted);
@@ -907,16 +910,23 @@ function visibleTasks(){
     list = list.filter(t => !t.done);
     if(currentFilter === 'today') list = list.filter(t => t.doDate && t.doDate <= today);
     if(currentFilter === 'ball')  list = list.filter(t => (t.assignee || '').trim() !== '');
-    list.sort((a,b) => {
-      const da = a.doDate || '9999-12-31', db = b.doDate || '9999-12-31';
-      if(da !== db) return da.localeCompare(db);
-      const pa = a.priority === '' || a.priority == null ? 999 : Number(a.priority);
-      const pb = b.priority === '' || b.priority == null ? 999 : Number(b.priority);
-      if(pa !== pb) return pa - pb;
-      const aa = a.assignee || '', ab = b.assignee || '';
-      if(aa !== ab) return aa.localeCompare(ab, 'ja');
-      return (a.title || '').localeCompare(b.title || '', 'ja');
-    });
+    if(preserveOrder && orderCache.length){
+      // 前回の並び順を維持（新規タスクは末尾）
+      const pos = new Map(orderCache.map((id, i) => [id, i]));
+      list.sort((a,b) => (pos.has(a.id) ? pos.get(a.id) : Infinity) - (pos.has(b.id) ? pos.get(b.id) : Infinity));
+    } else {
+      list.sort((a,b) => {
+        const da = a.doDate || '9999-12-31', db = b.doDate || '9999-12-31';
+        if(da !== db) return da.localeCompare(db);
+        const pa = a.priority === '' || a.priority == null ? 999 : Number(a.priority);
+        const pb = b.priority === '' || b.priority == null ? 999 : Number(b.priority);
+        if(pa !== pb) return pa - pb;
+        const aa = a.assignee || '', ab = b.assignee || '';
+        if(aa !== ab) return aa.localeCompare(ab, 'ja');
+        return (a.title || '').localeCompare(b.title || '', 'ja');
+      });
+    }
+    orderCache = list.map(t => t.id);
   }
   if(q) list = list.filter(t =>
     (t.title || '').toLowerCase().includes(q) ||
@@ -957,9 +967,9 @@ function renderHero(){
   }
 }
 
-function render(){
+function render(preserveOrder){
   renderHero();
-  const list = visibleTasks();
+  const list = visibleTasks(preserveOrder === true);
   const tbody = $('taskBody');
   const cards = $('cards');
   const today = todayStr();
@@ -1144,7 +1154,7 @@ function renderGantt(list){
 
 /* ================= 一括操作 ================= */
 function syncSelAll(){
-  const list = visibleTasks();
+  const list = visibleTasks(true);
   $('selAll').checked = list.length > 0 && list.every(t => selectedIds.has(t.id));
 }
 function updateBulkBar(){
@@ -1220,7 +1230,7 @@ function addQuickTask(){
   });
   quickDraft = { doDate: todayStr(), startDate: '', endDate: '', priority: '', title: '', assignee: '', memo: '', effort: '' };
   lastEditedId = tasks[tasks.length - 1].id;
-  markDirty(); render();
+  markDirty(); render(true); // 追加行は末尾に付き、並べ替えボタンで整列
   const qt = document.querySelector('.quickAdd .f-title');
   if(qt) qt.focus();
 }
@@ -1613,9 +1623,9 @@ $('ganttWrap').addEventListener('click', e => {
   if(el) openTaskModal(el.dataset.id);
 });
 $('selAll').addEventListener('change', e => {
-  if(e.target.checked) visibleTasks().forEach(t => selectedIds.add(t.id));
+  if(e.target.checked) visibleTasks(true).forEach(t => selectedIds.add(t.id));
   else selectedIds.clear();
-  render();
+  render(true);
 });
 for(const k in NOTE_FIELDS){
   $(NOTE_FIELDS[k]).addEventListener('input', e => {
