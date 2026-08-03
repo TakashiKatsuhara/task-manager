@@ -184,6 +184,10 @@
   .noteCard textarea:focus{outline:none;}
   .noteCard textarea::placeholder{color:#b0b1b8;}
 
+  /* 編集直後の行ハイライト */
+  @keyframes rowFlash{ 0%{background-color:rgba(49,89,196,.16);} 100%{background-color:transparent;} }
+  tr.flash td{animation:rowFlash 1.1s ease-out;}
+
   /* クイック追加行 */
   tr.quickAdd td{background:var(--bg); border-bottom:1px dashed #d5d5da;}
   @media (prefers-color-scheme: dark){ tr.quickAdd td{border-bottom-color:#3a3a3e;} }
@@ -720,6 +724,7 @@ let selectedIds = new Set();
 let calMonth = null;
 let currentView = 'list';
 let quickDraft = { doDate: '', startDate: '', endDate: '', priority: '', title: '', assignee: '', memo: '', effort: '' };
+let lastEditedId = null;
 let appNotes = { morning: '', evening: '', other: '', updatedAt: null };
 const NOTE_FIELDS = { morning: 'note_morning', evening: 'note_evening', other: 'note_other' };
 const LS_NOTES = 'tm_notes';
@@ -860,6 +865,7 @@ function updateField(id, field, value){
   if(field === 'title' && !String(value).trim()) return render();
   t[field] = typeof value === 'string' && field !== 'memo' ? value.trim() : value;
   t.updatedAt = nowIso();
+  lastEditedId = id;
   markDirty();
   render();
 }
@@ -906,7 +912,10 @@ function visibleTasks(){
       if(da !== db) return da.localeCompare(db);
       const pa = a.priority === '' || a.priority == null ? 999 : Number(a.priority);
       const pb = b.priority === '' || b.priority == null ? 999 : Number(b.priority);
-      return pa - pb;
+      if(pa !== pb) return pa - pb;
+      const aa = a.assignee || '', ab = b.assignee || '';
+      if(aa !== ab) return aa.localeCompare(ab, 'ja');
+      return (a.title || '').localeCompare(b.title || '', 'ja');
     });
   }
   if(q) list = list.filter(t =>
@@ -993,7 +1002,7 @@ function render(){
 
     // --- table row（インライン編集） ---
     const tr = document.createElement('tr');
-    tr.className = cls;
+    tr.className = cls + (t.id === lastEditedId ? ' flash' : '');
     tr.innerHTML = `
       <td class="chk"><input type="checkbox" class="rnd" title="完了" ${t.done ? 'checked' : ''}></td>
       ${dateCell('doDate', t.doDate, 'dc-do')}
@@ -1050,6 +1059,8 @@ function render(){
     card.addEventListener('click', e => { if(e.target.type !== 'checkbox') openTaskModal(t.id); });
     cards.appendChild(card);
   }
+
+  lastEditedId = null;
 
   // 削除・非表示になったタスクを選択から外す
   const alive = new Set(list.map(t => t.id));
@@ -1208,6 +1219,7 @@ function addQuickTask(){
     deleted: false, updatedAt: nowIso()
   });
   quickDraft = { doDate: todayStr(), startDate: '', endDate: '', priority: '', title: '', assignee: '', memo: '', effort: '' };
+  lastEditedId = tasks[tasks.length - 1].id;
   markDirty(); render();
   const qt = document.querySelector('.quickAdd .f-title');
   if(qt) qt.focus();
