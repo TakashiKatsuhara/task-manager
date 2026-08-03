@@ -18,7 +18,7 @@
     --red:#cc4b3e; --red-text:#b23a2e; --red-pill:#f9e2de; --red-row:rgba(204,75,62,.06);
     --blue-pill:#3159c4; --blue-row:rgba(49,89,196,.11);
     --next-pill-bg:#e3eafc; --next-pill-text:#4a67b8; --next-row:rgba(49,89,196,.05);
-    --done-text:#b9b9be;
+    --done-text:#b9b9be; --memo:#494a50;
     --seg-bg:#e8e8ed; --input-bg:#f2f2f7;
     --glass:rgba(255,255,255,.72);
     --shadow:0 1px 2px rgba(0,0,0,.04), 0 8px 24px rgba(0,0,0,.05);
@@ -30,7 +30,7 @@
       --red:#e06b5c; --red-text:#ec8577; --red-pill:rgba(224,107,92,.22); --red-row:rgba(224,107,92,.09);
       --blue-pill:#5b7ee0; --blue-row:rgba(91,126,224,.20);
       --next-pill-bg:rgba(91,126,224,.20); --next-pill-text:#93acf0; --next-row:rgba(91,126,224,.07);
-      --done-text:#5e5e64;
+      --done-text:#5e5e64; --memo:#c6c7cd;
       --seg-bg:#2c2c2e; --input-bg:#2c2c2e;
       --glass:rgba(20,20,22,.72);
       --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.5);
@@ -101,9 +101,9 @@
   }
   thead th{
     color:var(--sub); font-size:11px; font-weight:600; letter-spacing:.05em;
-    padding:12px 8px 8px; text-align:left; white-space:nowrap; border-bottom:0.5px solid var(--line);
+    padding:8px 6px 6px; text-align:left; white-space:nowrap; border-bottom:0.5px solid var(--line);
   }
-  tbody td{padding:9px 8px; border-bottom:0.5px solid var(--line); vertical-align:middle; transition:background .15s;}
+  tbody td{padding:3px 6px; border-bottom:0.5px solid var(--line); vertical-align:middle; transition:background .15s;}
   tbody tr:last-child td{border-bottom:none;}
   tbody tr:hover td{background:rgba(125,125,135,.05);}
   td.chk, th.chk{width:44px; text-align:center; padding-left:16px;}
@@ -122,7 +122,7 @@
   /* ===== 丸チェックボックス（リマインダー風） ===== */
   input[type=checkbox].rnd{
     appearance:none; -webkit-appearance:none;
-    width:21px; height:21px; border-radius:50%;
+    width:19px; height:19px; border-radius:50%;
     border:1.5px solid #c7c7cc; background:transparent; cursor:pointer;
     display:inline-grid; place-content:center; transition:all .15s;
     flex-shrink:0; vertical-align:middle;
@@ -138,7 +138,7 @@
   /* ===== 日付ピル ===== */
   td.dateCell{position:relative; white-space:nowrap; cursor:pointer; width:78px;}
   .dateText{
-    font-size:12.5px; display:inline-block; padding:3.5px 9px; border-radius:999px;
+    font-size:12px; display:inline-block; padding:2px 8px; border-radius:999px;
     font-variant-numeric:tabular-nums; transition:background .15s;
   }
   .dateEmpty{color:#c0c0c6; padding-left:4px;}
@@ -151,26 +151,28 @@
 
   /* ===== インライン入力 ===== */
   tbody input:not(.rnd){
-    border:none; background:transparent; border-radius:8px; padding:5px 6px;
-    font-size:13.5px; font-family:inherit; color:inherit; width:100%; transition:background .15s, box-shadow .15s;
+    border:none; background:transparent; border-radius:7px; padding:3px 5px;
+    font-size:13px; font-family:inherit; color:inherit; width:100%; transition:background .15s, box-shadow .15s;
   }
   tbody input:not(.rnd):hover{background:rgba(125,125,135,.08);}
   tbody input:not(.rnd):focus{outline:none; background:var(--card); box-shadow:0 0 0 2px var(--accent);}
-  input.f-priority{width:48px; text-align:center; font-variant-numeric:tabular-nums;}
-  input.f-title{min-width:220px; font-weight:600;}
-  input.f-assignee{width:112px;}
-  input.f-memo{min-width:140px; font-size:12.5px; color:var(--sub);}
-  input.f-effort{width:72px; font-size:12.5px; color:var(--sub);}
+  input.f-priority{width:44px; text-align:center; font-variant-numeric:tabular-nums;}
+  input.f-title{min-width:240px; font-weight:700; font-size:13.5px; letter-spacing:-.005em;}
+  input.f-assignee{width:104px;}
+  tbody input.f-memo{min-width:190px; font-size:12.5px; color:var(--memo);}
+  tbody input.f-effort{width:64px; font-size:12px; color:var(--sub);}
 
-  .badge{display:inline-block; font-size:11px; border-radius:999px; padding:2.5px 9px; white-space:nowrap; font-weight:600;}
+  .badge{display:inline-block; font-size:10.5px; border-radius:999px; padding:2px 8px; white-space:nowrap; font-weight:600;}
   .badge.recur{background:rgba(106,140,110,.14); color:#597b60;}
   @media (prefers-color-scheme: dark){ .badge.recur{color:#a3bfa9;} }
   .badge.single{background:var(--seg-bg); color:var(--sub); font-weight:500;}
   .badge.ball{background:rgba(176,142,74,.15); color:#8d7340;}
   @media (prefers-color-scheme: dark){ .badge.ball{color:#cdb587;} }
   .lastDone{font-size:10.5px; color:var(--sub); margin-top:2px;}
-  .editBtn{border:none; background:transparent; color:#c0c0c6; cursor:pointer; font-size:14px; padding:5px 7px; border-radius:8px; transition:all .15s;}
+  .editBtn{border:none; background:transparent; color:#c0c0c6; cursor:pointer; font-size:13px; padding:3px 5px; border-radius:7px; transition:all .15s;}
   .editBtn:hover{background:var(--seg-bg); color:var(--text);}
+  th.edit, td.edit{width:58px; white-space:nowrap;}
+  .cardMemo{color:var(--memo) !important;}
 
   #cards{display:none;}
   .empty{padding:56px 20px; text-align:center; color:var(--sub); font-size:14px;}
@@ -495,6 +497,7 @@
     <div class="modalBtns">
       <button class="btnSave" onclick="saveTask()">保存</button>
       <button class="btnCancel" onclick="closeTaskModal()">キャンセル</button>
+      <button class="btnCancel" id="btnDup" onclick="duplicateTask(editingId)" style="display:none">⧉ 複製</button>
       <button class="btnDelete" id="btnDelete" onclick="deleteTask()" style="display:none">削除</button>
     </div>
   </div>
@@ -949,7 +952,7 @@ function render(){
       <td><input type="text" class="f-memo" data-field="memo" value="${esc(t.memo || '')}"></td>
       <td><input type="text" class="f-effort" data-field="effort" value="${esc(t.effort || '')}"></td>
       <td class="sel"><input type="checkbox" class="selBox" title="選択（一括日付変更用）" ${selectedIds.has(t.id) ? 'checked' : ''}></td>
-      <td class="edit"><button class="editBtn" title="詳細編集">✎</button></td>`;
+      <td class="edit"><button class="editBtn dupBtn" title="複製">⧉</button><button class="editBtn" title="詳細編集">✎</button></td>`;
     tr.querySelector('td.sel input').addEventListener('change', e => {
       selectedIds[e.target.checked ? 'add' : 'delete'](t.id);
       syncSelAll();
@@ -963,7 +966,8 @@ function render(){
     tr.querySelectorAll('.dateInput').forEach(di => {
       di.addEventListener('click', () => { try{ di.showPicker(); }catch(e){} });
     });
-    tr.querySelector('.editBtn').addEventListener('click', () => openTaskModal(t.id));
+    tr.querySelector('.dupBtn').addEventListener('click', () => duplicateTask(t.id));
+    tr.querySelector('.editBtn:not(.dupBtn)').addEventListener('click', () => openTaskModal(t.id));
     tbody.appendChild(tr);
 
     // --- mobile card ---
@@ -1127,6 +1131,7 @@ function openTaskModal(id){
   const t = id ? tasks.find(x => x.id === id) : null;
   $('taskModalTitle').textContent = t ? 'タスクを編集' : 'タスクを追加';
   $('btnDelete').style.display = t ? 'inline-block' : 'none';
+  $('btnDup').style.display = t ? 'inline-block' : 'none';
   $('f_title').value = t ? t.title : '';
   $('f_doDate').value = t ? (t.doDate || '') : todayStr();
   $('f_startDate').value = t?.startDate || '';
@@ -1178,6 +1183,21 @@ function saveTask(){
     tasks.push(Object.assign({ id: uid(), done: false, doneDate: null, lastDone: null, doneCount: 0, deleted: false }, data));
   }
   closeTaskModal(); markDirty(); render();
+}
+function duplicateTask(id){
+  const t = tasks.find(x => x.id === id);
+  if(!t) return;
+  const copy = JSON.parse(JSON.stringify(t));
+  copy.id = uid();
+  copy.done = false; copy.doneDate = null; copy.lastDone = null; copy.doneCount = 0;
+  copy.deleted = false;
+  copy.updatedAt = nowIso();
+  tasks.push(copy);
+  markDirty();
+  closeTaskModal();
+  render();
+  openTaskModal(copy.id);
+  showToast('⧉ 複製しました。内容を編集してください');
 }
 function deleteTask(){
   if(!editingId) return;
