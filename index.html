@@ -290,6 +290,7 @@
   .modal h2{font-size:17px; margin-bottom:18px; font-weight:700; letter-spacing:-.01em;}
   .formRow{margin-bottom:13px;}
   .formRow label{display:block; font-size:12px; font-weight:600; color:var(--sub); margin-bottom:5px;}
+  .tokenMask{-webkit-text-security:disc;}
   .formRow input[type=text], .formRow input[type=date], .formRow input[type=number],
   .formRow select, .formRow textarea, .formRow input[type=password]{
     width:100%; border:none; border-radius:10px; padding:9px 12px; font-size:14px; font-family:inherit;
@@ -603,7 +604,7 @@
       </div>
       <div class="formRow">
         <label>アクセストークン（Fine-grained PAT）</label>
-        <input type="password" id="s_token" placeholder="github_pat_...">
+        <input type="text" id="s_token" class="tokenMask" placeholder="github_pat_..." autocomplete="off" spellcheck="false" name="gh_pat_field">
         <div class="hint">この端末のブラウザ内（localStorage）にのみ保存されます。共用PCでは使用しないでください。</div>
       </div>
     </div>
