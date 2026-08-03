@@ -158,6 +158,24 @@
   tbody input:not(.rnd):hover{background:rgba(125,125,135,.08);}
   tbody input:not(.rnd):focus{outline:none; background:var(--card); box-shadow:0 0 0 2px var(--accent);}
   input.f-priority{width:100%; text-align:center; font-variant-numeric:tabular-nums;}
+  .priBtn{
+    border:none; background:transparent; border-radius:7px; padding:4px 0; width:100%;
+    font-size:13px; cursor:pointer; color:#c6c6cb; font-variant-numeric:tabular-nums; font-family:inherit;
+    transition:background .15s;
+  }
+  .priBtn.has{color:var(--text); font-weight:700;}
+  .priBtn:hover{background:rgba(125,125,135,.12);}
+  #priPop{
+    position:fixed; display:none; grid-template-columns:repeat(6, 36px); gap:4px;
+    background:var(--card); border-radius:13px; padding:8px;
+    box-shadow:0 8px 30px rgba(0,0,0,.25); border:0.5px solid var(--line); z-index:300;
+  }
+  #priPop button{
+    border:none; background:var(--seg-bg); border-radius:8px; width:36px; height:32px;
+    font-size:13.5px; cursor:pointer; color:var(--text); font-family:inherit; font-variant-numeric:tabular-nums;
+  }
+  #priPop button:hover{background:var(--accent); color:#fff;}
+  #priPop button[data-v=""]{color:var(--sub); font-weight:700;}
   input.f-title{font-weight:700; font-size:13.5px; letter-spacing:-.005em;}
   input.f-assignee{width:100%;}
   tbody input.f-memo{font-size:12.5px; color:var(--memo);}
@@ -632,6 +650,14 @@
   </div>
 </div>
 
+<div id="priPop">
+  <button data-v="">ー</button>
+  <button data-v="0">0</button><button data-v="1">1</button><button data-v="2">2</button>
+  <button data-v="3">3</button><button data-v="4">4</button><button data-v="5">5</button>
+  <button data-v="6">6</button><button data-v="7">7</button><button data-v="8">8</button>
+  <button data-v="9">9</button>
+</div>
+
 <div id="toast"><span id="toastMsg"></span><button id="toastUndo" style="display:none" onclick="undoLast()">元に戻す</button></div>
 
 <script>
@@ -1019,7 +1045,7 @@ function render(preserveOrder){
       ${dateCell('doDate', t.doDate, 'dc-do')}
       ${dateCell('startDate', t.startDate)}
       ${dateCell('endDate', t.endDate, '', dlOver)}
-      <td><input type="number" class="f-priority" data-field="priority" min="0" value="${t.priority === '' || t.priority == null ? '' : esc(t.priority)}"></td>
+      <td><button class="priBtn${t.priority === '' || t.priority == null ? '' : ' has'}" title="優先度を選択">${t.priority === '' || t.priority == null ? 'ー' : esc(t.priority)}</button></td>
       <td style="white-space:nowrap">${badges(t)}</td>
       <td><input type="text" class="f-title" data-field="title" value="${esc(t.title)}">${lastDone}</td>
       <td><input type="text" class="f-assignee" data-field="assignee" value="${esc(t.assignee || '')}" placeholder="自分"></td>
@@ -1039,6 +1065,10 @@ function render(preserveOrder){
     });
     tr.querySelectorAll('.dateInput').forEach(di => {
       di.addEventListener('click', () => { try{ di.showPicker(); }catch(e){} });
+    });
+    tr.querySelector('.priBtn').addEventListener('click', e => {
+      e.stopPropagation();
+      openPriPopover(e.target, v => updateField(t.id, 'priority', v));
     });
     tr.querySelector('.dupBtn').addEventListener('click', () => duplicateTask(t.id));
     tr.querySelector('.editBtn:not(.dupBtn)').addEventListener('click', () => openTaskModal(t.id));
@@ -1190,7 +1220,7 @@ function buildQuickRow(){
   tr.innerHTML = `
     <td class="chk"><span class="qPlus">＋</span></td>
     ${qDate('doDate')}${qDate('startDate')}${qDate('endDate')}
-    <td><input type="number" class="f-priority" data-q="priority" min="0" value="${esc(quickDraft.priority)}"></td>
+    <td><button class="priBtn qPri${quickDraft.priority === '' ? '' : ' has'}" title="優先度を選択">${quickDraft.priority === '' ? 'ー' : esc(quickDraft.priority)}</button></td>
     <td><span class="badge single" style="opacity:.5">単発</span></td>
     <td><input type="text" class="f-title" data-q="title" placeholder="新しいタスクを入力して Enter" value="${esc(quickDraft.title)}"></td>
     <td><input type="text" class="f-assignee" data-q="assignee" placeholder="自分" value="${esc(quickDraft.assignee)}"></td>
@@ -1210,9 +1240,30 @@ function buildQuickRow(){
   tr.querySelectorAll('.dateInput').forEach(di => {
     di.addEventListener('click', () => { try{ di.showPicker(); }catch(e){} });
   });
+  tr.querySelector('.qPri').addEventListener('click', e => {
+    e.stopPropagation();
+    openPriPopover(e.target, v => {
+      quickDraft.priority = v;
+      e.target.textContent = v === '' ? 'ー' : v;
+      e.target.classList.toggle('has', v !== '');
+    });
+  });
   tr.querySelector('.qAdd').addEventListener('click', addQuickTask);
   return tr;
 }
+
+/* ================= 優先度ポップオーバー ================= */
+let priPopCb = null;
+function openPriPopover(anchor, cb){
+  priPopCb = cb;
+  const pop = $('priPop');
+  pop.style.display = 'grid';
+  const r = anchor.getBoundingClientRect();
+  const w = pop.offsetWidth, h = pop.offsetHeight;
+  pop.style.left = Math.max(8, Math.min(window.innerWidth - w - 8, r.left - w / 2 + r.width / 2)) + 'px';
+  pop.style.top = (r.bottom + h + 8 > window.innerHeight ? r.top - h - 6 : r.bottom + 6) + 'px';
+}
+function closePriPopover(){ $('priPop').style.display = 'none'; priPopCb = null; }
 function addQuickTask(){
   const title = (quickDraft.title || '').trim();
   if(!title) return;
@@ -1635,6 +1686,19 @@ for(const k in NOTE_FIELDS){
     markDirty();
   });
 }
+$('priPop').querySelectorAll('button').forEach(b => {
+  b.addEventListener('click', () => {
+    const v = b.dataset.v === '' ? '' : Number(b.dataset.v);
+    const cb = priPopCb;
+    closePriPopover();
+    if(cb) cb(v);
+  });
+});
+document.addEventListener('click', e => {
+  if($('priPop').style.display !== 'none' && !e.target.closest('#priPop') && !e.target.closest('.priBtn')){
+    closePriPopover();
+  }
+});
 loadLocal();
 currentView = localStorage.getItem(LS_VIEW) || 'list';
 document.querySelectorAll('.seg .chip[data-view]').forEach(c => c.classList.toggle('active', c.dataset.view === currentView));
