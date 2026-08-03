@@ -173,6 +173,17 @@
   .editBtn{border:none; background:transparent; color:#c0c0c6; cursor:pointer; font-size:13px; padding:3px 5px; border-radius:7px; transition:all .15s;}
   .editBtn:hover{background:var(--seg-bg); color:var(--text);}
 
+  /* メモタブ */
+  #notesWrap{display:none; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:14px;}
+  .noteCard{background:var(--card); border-radius:16px; box-shadow:var(--shadow); padding:16px 18px;}
+  .noteCard h3{font-size:13.5px; font-weight:700; margin-bottom:10px;}
+  .noteCard textarea{
+    width:100%; min-height:340px; border:none; background:transparent; resize:vertical;
+    font-family:inherit; font-size:13.5px; line-height:1.75; color:var(--text);
+  }
+  .noteCard textarea:focus{outline:none;}
+  .noteCard textarea::placeholder{color:#b0b1b8;}
+
   /* クイック追加行 */
   tr.quickAdd td{background:var(--bg); border-bottom:1px dashed #d5d5da;}
   @media (prefers-color-scheme: dark){ tr.quickAdd td{border-bottom-color:#3a3a3e;} }
@@ -374,7 +385,7 @@
 </div>
 
 <div class="toolbar">
-  <div class="seg">
+  <div class="seg" id="filterSeg">
     <button class="chip active" data-filter="active" onclick="setFilter(this)">すべて</button>
     <button class="chip" data-filter="today" onclick="setFilter(this)">今日</button>
     <button class="chip" data-filter="ball" onclick="setFilter(this)">ボール待ち</button>
@@ -383,6 +394,7 @@
   <div class="seg">
     <button class="chip active" data-view="list" onclick="setView(this)">☰ リスト</button>
     <button class="chip" data-view="gantt" onclick="setView(this)">📊 ガント</button>
+    <button class="chip" data-view="notes" onclick="setView(this)">📝 メモ</button>
   </div>
   <input id="searchBox" type="text" placeholder="🔍 検索" oninput="render()">
 </div>
@@ -405,6 +417,11 @@
   </table>
   <div id="cards"></div>
   <div id="ganttWrap"></div>
+  <div id="notesWrap">
+    <div class="noteCard"><h3>🌅 朝のルーティン</h3><textarea id="note_morning" placeholder="メモを入力…"></textarea></div>
+    <div class="noteCard"><h3>🌆 帰りのルーティン</h3><textarea id="note_evening" placeholder="メモを入力…"></textarea></div>
+    <div class="noteCard"><h3>📝 その他</h3><textarea id="note_other" placeholder="メモを入力…"></textarea></div>
+  </div>
   <div id="emptyMsg" class="empty" style="display:none"><div class="big">🎉</div>タスクはありません</div>
   <div class="legend">
     <span><i class="dot" style="background:var(--red)"></i>期限切れ</span>
@@ -703,6 +720,9 @@ let selectedIds = new Set();
 let calMonth = null;
 let currentView = 'list';
 let quickDraft = { doDate: '', startDate: '', endDate: '', priority: '', title: '', assignee: '', memo: '', effort: '' };
+let appNotes = { morning: '', evening: '', other: '', updatedAt: null };
+const NOTE_FIELDS = { morning: 'note_morning', evening: 'note_evening', other: 'note_other' };
+const LS_NOTES = 'tm_notes';
 let ganttScrollPending = false;
 const LS_VIEW = 'tm_view';
 
@@ -716,11 +736,16 @@ function loadLocal(){
     const s = JSON.parse(localStorage.getItem(LS_SETTINGS) || 'null');
     if(s) appSettings = s;
   }catch(e){}
+  try{
+    const n = JSON.parse(localStorage.getItem(LS_NOTES) || 'null');
+    if(n) appNotes = n;
+  }catch(e){}
   rebuildHolidaySet();
 }
 function saveLocal(){
   localStorage.setItem(LS_TASKS, JSON.stringify(tasks));
   localStorage.setItem(LS_SETTINGS, JSON.stringify(appSettings));
+  localStorage.setItem(LS_NOTES, JSON.stringify(appNotes));
 }
 function getCfg(){
   try{ return JSON.parse(localStorage.getItem(LS_CFG) || 'null'); }catch(e){ return null; }
@@ -930,12 +955,21 @@ function render(){
   const cards = $('cards');
   const today = todayStr();
   const isG = currentView === 'gantt';
+  const isN = currentView === 'notes';
   tbody.innerHTML = '';
   cards.innerHTML = '';
-  $('emptyMsg').style.display = list.length ? 'none' : 'block';
-  $('taskTable').style.display = !isG ? '' : 'none';
-  cards.style.display = isG ? 'none' : '';
+  $('emptyMsg').style.display = (!isN && !list.length) ? 'block' : 'none';
+  $('taskTable').style.display = (!isG && !isN) ? '' : 'none';
+  cards.style.display = (isG || isN) ? 'none' : '';
   $('ganttWrap').style.display = (isG && list.length) ? 'block' : 'none';
+  $('notesWrap').style.display = isN ? 'grid' : 'none';
+  $('filterSeg').style.display = isN ? 'none' : '';
+  $('searchBox').style.display = isN ? 'none' : '';
+  if(isN){
+    refreshNoteInputs();
+    updateBulkBar();
+    return;
+  }
   if(isG){
     renderGantt(list);
     const alive = new Set(list.map(t => t.id));
@@ -1351,7 +1385,19 @@ function mergeSettings(remote){
     rebuildHolidaySet();
   }
 }
-function syncDoc(){ return { tasks, settings: appSettings, savedAt: nowIso() }; }
+function mergeNotes(remote){
+  if(remote && (remote.updatedAt || '') > (appNotes.updatedAt || '')){
+    appNotes = remote;
+    refreshNoteInputs();
+  }
+}
+function refreshNoteInputs(){
+  for(const k in NOTE_FIELDS){
+    const el = $(NOTE_FIELDS[k]);
+    if(el && document.activeElement !== el) el.value = appNotes[k] || '';
+  }
+}
+function syncDoc(){ return { tasks, settings: appSettings, notes: appNotes, savedAt: nowIso() }; }
 function setSyncStatus(text, cls){
   const el = $('syncStatus');
   el.textContent = text;
@@ -1364,12 +1410,13 @@ async function pull(){
     setSyncStatus('同期中…');
     const { data, sha } = await ghGet(cfg);
     if(data && Array.isArray(data.tasks)) tasks = mergeTasks(data.tasks, tasks);
-    if(data) mergeSettings(data.settings);
+    if(data){ mergeSettings(data.settings); mergeNotes(data.notes); }
     ghSha = sha;
     saveLocal();
     render();
     const same = data && JSON.stringify(data.tasks) === JSON.stringify(tasks)
-      && JSON.stringify(data.settings || null) === JSON.stringify(appSettings);
+      && JSON.stringify(data.settings || null) === JSON.stringify(appSettings)
+      && JSON.stringify(data.notes || null) === JSON.stringify(appNotes);
     if(!same) await push();
     else setSyncStatus(`同期済み ${new Date().toLocaleTimeString('ja-JP', {hour:'2-digit', minute:'2-digit'})}`, 'ok');
   }catch(e){
@@ -1388,7 +1435,7 @@ async function push(){
       try{
         const { data, sha } = await ghGet(cfg);
         if(data && Array.isArray(data.tasks)) tasks = mergeTasks(data.tasks, tasks);
-        if(data) mergeSettings(data.settings);
+        if(data){ mergeSettings(data.settings); mergeNotes(data.notes); }
         ghSha = await ghPut(cfg, syncDoc(), sha);
         saveLocal(); render();
         setSyncStatus(`同期済み ${new Date().toLocaleTimeString('ja-JP', {hour:'2-digit', minute:'2-digit'})}`, 'ok');
@@ -1558,6 +1605,13 @@ $('selAll').addEventListener('change', e => {
   else selectedIds.clear();
   render();
 });
+for(const k in NOTE_FIELDS){
+  $(NOTE_FIELDS[k]).addEventListener('input', e => {
+    appNotes[k] = e.target.value;
+    appNotes.updatedAt = nowIso();
+    markDirty();
+  });
+}
 loadLocal();
 currentView = localStorage.getItem(LS_VIEW) || 'list';
 document.querySelectorAll('.seg .chip[data-view]').forEach(c => c.classList.toggle('active', c.dataset.view === currentView));
