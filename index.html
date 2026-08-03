@@ -66,7 +66,7 @@
   .topbar button.primary{background:var(--accent); color:#fff; font-weight:600;}
 
   /* ===== ヒーロー（大見出し） ===== */
-  .hero{padding:26px 22px 6px; max-width:1200px; margin:0 auto;}
+  .hero{padding:26px 22px 6px;}
   .hero h1{font-size:27px; font-weight:700; letter-spacing:-.01em; line-height:1.15;}
   .hero .sub{margin-top:6px; font-size:13px; color:var(--sub); display:flex; gap:14px; flex-wrap:wrap; align-items:center;}
   .hero .sub b{color:var(--text); font-weight:600;}
@@ -77,7 +77,7 @@
   #progressText{font-size:12px; color:var(--sub); white-space:nowrap;}
 
   /* ===== セグメント＋検索 ===== */
-  .toolbar{display:flex; gap:12px; align-items:center; padding:14px 22px 10px; flex-wrap:wrap; max-width:1200px; margin:0 auto;}
+  .toolbar{display:flex; gap:12px; align-items:center; padding:14px 22px 10px; flex-wrap:wrap;}
   .seg{display:inline-flex; background:var(--seg-bg); border-radius:11px; padding:2.5px; gap:2px;}
   .seg .chip{
     border:none; background:transparent; color:var(--sub); border-radius:8.5px; padding:6px 14px;
@@ -92,13 +92,14 @@
   #searchBox::placeholder{color:var(--sub);}
   #searchBox:focus{outline:2px solid var(--accent); outline-offset:0;}
 
-  main{padding:4px 22px 100px; max-width:1200px; margin:0 auto;}
+  main{padding:4px 22px 100px;}
 
   /* ===== テーブル（カード型） ===== */
   #taskTable{
-    width:100%; border-collapse:separate; border-spacing:0;
+    width:100%; table-layout:fixed; border-collapse:separate; border-spacing:0;
     background:var(--card); border-radius:16px; overflow:hidden; box-shadow:var(--shadow);
   }
+  tbody td{overflow:hidden;}
   thead th{
     color:var(--sub); font-size:11px; font-weight:600; letter-spacing:.05em;
     padding:8px 6px 6px; text-align:left; white-space:nowrap; border-bottom:0.5px solid var(--line);
@@ -156,10 +157,10 @@
   }
   tbody input:not(.rnd):hover{background:rgba(125,125,135,.08);}
   tbody input:not(.rnd):focus{outline:none; background:var(--card); box-shadow:0 0 0 2px var(--accent);}
-  input.f-priority{width:44px; text-align:center; font-variant-numeric:tabular-nums;}
-  input.f-title{min-width:240px; font-weight:700; font-size:13.5px; letter-spacing:-.005em;}
-  input.f-assignee{width:104px;}
-  tbody input.f-memo{min-width:190px; font-size:12.5px; color:var(--memo);}
+  input.f-priority{width:100%; text-align:center; font-variant-numeric:tabular-nums;}
+  input.f-title{font-weight:700; font-size:13.5px; letter-spacing:-.005em;}
+  input.f-assignee{width:100%;}
+  tbody input.f-memo{font-size:12.5px; color:var(--memo);}
   tbody input.f-effort{width:64px; font-size:12px; color:var(--sub);}
 
   .badge{display:inline-block; font-size:10.5px; border-radius:999px; padding:2px 8px; white-space:nowrap; font-weight:600;}
@@ -380,6 +381,11 @@
 
 <main>
   <table id="taskTable">
+    <colgroup>
+      <col style="width:40px"><col style="width:82px"><col style="width:82px"><col style="width:82px">
+      <col style="width:46px"><col style="width:100px"><col><col style="width:112px">
+      <col><col style="width:64px"><col style="width:28px"><col style="width:56px">
+    </colgroup>
     <thead>
       <tr>
         <th class="chk"></th><th>いつ</th><th>開始</th><th>〆切</th><th>優先</th><th>分類</th>
