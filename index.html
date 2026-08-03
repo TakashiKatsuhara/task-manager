@@ -172,6 +172,14 @@
   .lastDone{font-size:10.5px; color:var(--sub); margin-top:2px;}
   .editBtn{border:none; background:transparent; color:#c0c0c6; cursor:pointer; font-size:13px; padding:3px 5px; border-radius:7px; transition:all .15s;}
   .editBtn:hover{background:var(--seg-bg); color:var(--text);}
+
+  /* クイック追加行 */
+  tr.quickAdd td{background:var(--bg); border-bottom:1px dashed #d5d5da;}
+  @media (prefers-color-scheme: dark){ tr.quickAdd td{border-bottom-color:#3a3a3e;} }
+  tr.quickAdd:hover td{background:var(--bg);}
+  .qPlus{color:var(--accent); font-weight:700; font-size:16px;}
+  tr.quickAdd input::placeholder{color:#b0b1b8;}
+  .qAdd{color:var(--accent); font-weight:700;}
   th.edit, td.edit{width:58px; white-space:nowrap;}
   .cardMemo{color:var(--memo) !important;}
 
@@ -694,6 +702,7 @@ let toastTimer = null;
 let selectedIds = new Set();
 let calMonth = null;
 let currentView = 'list';
+let quickDraft = { doDate: '', startDate: '', endDate: '', priority: '', title: '', assignee: '', memo: '', effort: '' };
 let ganttScrollPending = false;
 const LS_VIEW = 'tm_view';
 
@@ -924,7 +933,7 @@ function render(){
   tbody.innerHTML = '';
   cards.innerHTML = '';
   $('emptyMsg').style.display = list.length ? 'none' : 'block';
-  $('taskTable').style.display = (!isG && list.length) ? '' : 'none';
+  $('taskTable').style.display = !isG ? '' : 'none';
   cards.style.display = isG ? 'none' : '';
   $('ganttWrap').style.display = (isG && list.length) ? 'block' : 'none';
   if(isG){
@@ -933,6 +942,11 @@ function render(){
     for(const id of [...selectedIds]) if(!alive.has(id)) selectedIds.delete(id);
     updateBulkBar();
     return;
+  }
+
+  if(currentFilter !== 'done'){
+    if(!quickDraft.doDate) quickDraft.doDate = today;
+    tbody.appendChild(buildQuickRow());
   }
 
   for(const t of list){
@@ -1109,6 +1123,60 @@ function bulkApplyDate(){
   const v = $('bulkDate').value;
   if(!v){ alert('日付を選択してください'); return; }
   bulkSet(v);
+}
+
+/* ================= クイック追加行 ================= */
+function buildQuickRow(){
+  const qDate = f =>
+    `<td class="dateCell"><span class="dateText ${quickDraft[f] ? '' : 'dateEmpty'}">${quickDraft[f] ? esc(fmtMD(quickDraft[f])) : 'ー'}</span><input type="date" class="dateInput" data-q="${f}" value="${esc(quickDraft[f])}"></td>`;
+  const tr = document.createElement('tr');
+  tr.className = 'quickAdd';
+  tr.innerHTML = `
+    <td class="chk"><span class="qPlus">＋</span></td>
+    ${qDate('doDate')}${qDate('startDate')}${qDate('endDate')}
+    <td><input type="number" class="f-priority" data-q="priority" min="0" value="${esc(quickDraft.priority)}"></td>
+    <td><span class="badge single" style="opacity:.5">単発</span></td>
+    <td><input type="text" class="f-title" data-q="title" placeholder="新しいタスクを入力して Enter" value="${esc(quickDraft.title)}"></td>
+    <td><input type="text" class="f-assignee" data-q="assignee" placeholder="自分" value="${esc(quickDraft.assignee)}"></td>
+    <td><input type="text" class="f-memo" data-q="memo" placeholder="メモ" value="${esc(quickDraft.memo)}"></td>
+    <td><input type="text" class="f-effort" data-q="effort" value="${esc(quickDraft.effort)}"></td>
+    <td class="sel"></td>
+    <td class="edit"><button class="editBtn qAdd" title="追加 (Enter)">↵</button></td>`;
+  tr.querySelectorAll('[data-q]').forEach(inp => {
+    const f = inp.dataset.q;
+    inp.addEventListener('input', e => { quickDraft[f] = e.target.value; });
+    inp.addEventListener('change', e => {
+      quickDraft[f] = e.target.value;
+      if(inp.classList.contains('dateInput')) render();
+    });
+    inp.addEventListener('keydown', e => { if(e.key === 'Enter') addQuickTask(); });
+  });
+  tr.querySelectorAll('.dateInput').forEach(di => {
+    di.addEventListener('click', () => { try{ di.showPicker(); }catch(e){} });
+  });
+  tr.querySelector('.qAdd').addEventListener('click', addQuickTask);
+  return tr;
+}
+function addQuickTask(){
+  const title = (quickDraft.title || '').trim();
+  if(!title) return;
+  tasks.push({
+    id: uid(), title,
+    doDate: quickDraft.doDate || null,
+    startDate: quickDraft.startDate || null,
+    endDate: quickDraft.endDate || null,
+    priority: quickDraft.priority === '' ? '' : Number(quickDraft.priority),
+    kind: 'single', freq: null, freqDay: null, freqInterval: null, holidayAdj: null,
+    effort: (quickDraft.effort || '').trim(),
+    assignee: (quickDraft.assignee || '').trim(),
+    memo: quickDraft.memo || '',
+    done: false, doneDate: null, lastDone: null, doneCount: 0,
+    deleted: false, updatedAt: nowIso()
+  });
+  quickDraft = { doDate: todayStr(), startDate: '', endDate: '', priority: '', title: '', assignee: '', memo: '', effort: '' };
+  markDirty(); render();
+  const qt = document.querySelector('.quickAdd .f-title');
+  if(qt) qt.focus();
 }
 
 /* ================= タスク編集モーダル ================= */
