@@ -768,6 +768,7 @@ const LS_SETTINGS = 'tm_settings';
 
 function loadLocal(){
   try{ tasks = JSON.parse(localStorage.getItem(LS_TASKS) || '[]'); }catch(e){ tasks = []; }
+  tasks = mergeTasks(tasks, []); // 万一のID重複を除去
   try{
     const s = JSON.parse(localStorage.getItem(LS_SETTINGS) || 'null');
     if(s) appSettings = s;
@@ -1061,7 +1062,9 @@ function render(preserveOrder){
     tr.querySelector('td.chk input').addEventListener('click', e => { e.stopPropagation(); toggleDone(t.id, e.target.checked); });
     tr.querySelectorAll('[data-field]').forEach(inp => {
       inp.addEventListener('change', e => updateField(t.id, inp.dataset.field, e.target.value));
-      inp.addEventListener('keydown', e => { if(e.key === 'Enter') e.target.blur(); });
+      inp.addEventListener('keydown', e => {
+        if(e.key === 'Enter' && !e.isComposing && e.keyCode !== 229) e.target.blur();
+      });
     });
     tr.querySelectorAll('.dateInput').forEach(di => {
       di.addEventListener('click', () => { try{ di.showPicker(); }catch(e){} });
@@ -1235,7 +1238,10 @@ function buildQuickRow(){
       quickDraft[f] = e.target.value;
       if(inp.classList.contains('dateInput')) render();
     });
-    inp.addEventListener('keydown', e => { if(e.key === 'Enter') addQuickTask(); });
+    inp.addEventListener('keydown', e => {
+      // IMEの変換確定Enterでは登録しない
+      if(e.key === 'Enter' && !e.isComposing && e.keyCode !== 229) addQuickTask();
+    });
   });
   tr.querySelectorAll('.dateInput').forEach(di => {
     di.addEventListener('click', () => { try{ di.showPicker(); }catch(e){} });
