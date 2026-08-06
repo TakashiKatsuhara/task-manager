@@ -938,9 +938,9 @@ function visibleTasks(preserveOrder){
     if(currentFilter === 'today') list = list.filter(t => t.doDate && t.doDate <= today);
     if(currentFilter === 'ball')  list = list.filter(t => (t.assignee || '').trim() !== '');
     if(preserveOrder && orderCache.length){
-      // 前回の並び順を維持（新規タスクは末尾）
+      // 前回の並び順を維持（新規タスクは先頭＝クイック追加行の直下に表示）
       const pos = new Map(orderCache.map((id, i) => [id, i]));
-      list.sort((a,b) => (pos.has(a.id) ? pos.get(a.id) : Infinity) - (pos.has(b.id) ? pos.get(b.id) : Infinity));
+      list.sort((a,b) => (pos.has(a.id) ? pos.get(a.id) : -1) - (pos.has(b.id) ? pos.get(b.id) : -1));
     } else {
       list.sort((a,b) => {
         const da = a.doDate || '9999-12-31', db = b.doDate || '9999-12-31';
@@ -1282,7 +1282,7 @@ function addQuickTask(){
   });
   quickDraft = { doDate: todayStr(), startDate: '', endDate: '', priority: '', title: '', assignee: '', memo: '', effort: '' };
   lastEditedId = tasks[tasks.length - 1].id;
-  markDirty(); render(true); // 追加行は末尾に付き、並べ替えボタンで整列
+  markDirty(); render(true); // 追加タスクはクイック行の直下に表示、⇅で整列
   const qt = document.querySelector('.quickAdd .f-title');
   if(qt) qt.focus();
 }
