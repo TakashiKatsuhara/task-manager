@@ -351,6 +351,7 @@
   #bulkBar input[type=date]{border:none; background:var(--seg-bg); border-radius:8px; padding:6px 8px; font-family:inherit; color:var(--text); font-size:13px;}
   #bulkBar button{border:none; border-radius:999px; padding:6px 13px; font-size:12.5px; cursor:pointer; background:var(--seg-bg); color:var(--text); font-family:inherit;}
   #bulkBar button.primary{background:var(--accent); color:#fff; font-weight:600;}
+  #bulkBar button.danger{background:var(--red-pill); color:var(--red-text); font-weight:600;}
   #bulkBar.show ~ #toast{bottom:84px;}
 
   /* ===== 休みカレンダー ===== */
@@ -463,6 +464,7 @@
   <button class="primary" onclick="bulkApplyDate()">適用</button>
   <button onclick="bulkSet(todayStr())">今日</button>
   <button onclick="bulkSet(nextBusinessDay(todayStr()))">翌営業日</button>
+  <button class="danger" onclick="bulkDelete()">削除</button>
   <button onclick="clearSelection()">解除</button>
 </div>
 
@@ -1212,6 +1214,18 @@ function bulkApplyDate(){
   const v = $('bulkDate').value;
   if(!v){ alert('日付を選択してください'); return; }
   bulkSet(v);
+}
+function bulkDelete(){
+  if(!selectedIds.size) return;
+  const n = selectedIds.size;
+  if(!confirm(`選択した${n}件のタスクを削除しますか？`)) return;
+  for(const id of selectedIds){
+    const t = tasks.find(x => x.id === id);
+    if(t){ t.deleted = true; t.updatedAt = nowIso(); }
+  }
+  selectedIds.clear();
+  markDirty(); render();
+  showToast(`🗑 ${n}件を削除しました`);
 }
 
 /* ================= クイック追加行 ================= */
