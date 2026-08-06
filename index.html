@@ -756,6 +756,7 @@ let selectedIds = new Set();
 let calMonth = null;
 let currentView = 'list';
 let quickDraft = { doDate: '', startDate: '', endDate: '', priority: '', title: '', assignee: '', memo: '', effort: '' };
+let addingQuick = false;
 let lastEditedId = null;
 let orderCache = []; // 前回表示時の並び順（インライン編集中は行を動かさないために保持）
 let appNotes = { morning: '', evening: '', other: '', updatedAt: null };
@@ -1247,14 +1248,22 @@ function buildQuickRow(){
     <td class="edit"><button class="editBtn qAdd" title="追加 (Enter)">↵</button></td>`;
   tr.querySelectorAll('[data-q]').forEach(inp => {
     const f = inp.dataset.q;
-    inp.addEventListener('input', e => { quickDraft[f] = e.target.value; });
+    // 行の作り直し中や、DOMから外れた古い入力欄からの遅延イベントは無視する
+    inp.addEventListener('input', e => {
+      if(addingQuick || !inp.isConnected) return;
+      quickDraft[f] = e.target.value;
+    });
     inp.addEventListener('change', e => {
+      if(addingQuick || !inp.isConnected) return;
       quickDraft[f] = e.target.value;
       if(inp.classList.contains('dateInput')) render();
     });
     inp.addEventListener('keydown', e => {
       // IMEの変換確定Enterでは登録しない
-      if(e.key === 'Enter' && !e.isComposing && e.keyCode !== 229) addQuickTask();
+      if(e.key === 'Enter' && !e.isComposing && e.keyCode !== 229){
+        e.preventDefault();
+        addQuickTask();
+      }
     });
   });
   tr.querySelectorAll('.dateInput').forEach(di => {
@@ -1300,11 +1309,19 @@ function addQuickTask(){
     done: false, doneDate: null, lastDone: null, doneCount: 0,
     deleted: false, updatedAt: nowIso()
   });
+  addingQuick = true;
   quickDraft = { doDate: todayStr(), startDate: '', endDate: '', priority: '', title: '', assignee: '', memo: '', effort: '' };
   lastEditedId = tasks[tasks.length - 1].id;
   markDirty(); render(true); // 追加タスクはクイック行の直下に表示、⇅で整列
   const qt = document.querySelector('.quickAdd .f-title');
-  if(qt) qt.focus();
+  if(qt){ qt.value = ''; qt.focus(); }
+  // 古い入力欄からの遅延イベントで文字が復活した場合のみ掃除する
+  setTimeout(() => {
+    addingQuick = false;
+    if(quickDraft.title === title) quickDraft.title = '';
+    const q2 = document.querySelector('.quickAdd .f-title');
+    if(q2 && q2.value === title) q2.value = '';
+  }, 80);
 }
 
 /* ================= タスク編集モーダル ================= */
