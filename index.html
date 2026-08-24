@@ -213,6 +213,18 @@
   .qPlus{color:var(--accent); font-weight:700; font-size:16px;}
   tr.quickAdd input::placeholder{color:#b0b1b8;}
   .qAdd{color:var(--accent); font-weight:700;}
+  tr.quickAdd.pending td{background:rgba(196,146,58,.10); border-bottom-color:#caa14a;}
+  tr.quickAdd.pending td:first-child{box-shadow:inset 3px 0 0 #b8862f;}
+  .qTitleWrap{display:flex; align-items:center; gap:6px;}
+  .qTitleWrap .f-title{flex:1; min-width:0;}
+  .qPending{
+    display:none; font-size:10.5px; font-weight:700; color:#96690f;
+    background:rgba(196,146,58,.18); border-radius:999px; padding:2.5px 10px;
+    white-space:nowrap; flex-shrink:0;
+  }
+  @media (prefers-color-scheme: dark){ .qPending{color:#d9a84e;} }
+  tr.quickAdd.pending .qPending{display:inline-block;}
+  tr.quickAdd.pending .qAdd{background:var(--accent); color:#fff; border-radius:7px; padding:3px 11px;}
   th.edit, td.edit{width:58px; white-space:nowrap;}
   .cardMemo{color:var(--memo) !important;}
 
@@ -1240,7 +1252,7 @@ function buildQuickRow(){
     ${qDate('doDate')}${qDate('startDate')}${qDate('endDate')}
     <td><button class="priBtn qPri${quickDraft.priority === '' ? '' : ' has'}" title="優先度を選択">${quickDraft.priority === '' ? 'ー' : esc(quickDraft.priority)}</button></td>
     <td><span class="badge single" style="opacity:.5">単発</span></td>
-    <td><input type="text" class="f-title" data-q="title" placeholder="新しいタスクを入力して Enter" value="${esc(quickDraft.title)}"></td>
+    <td><div class="qTitleWrap"><input type="text" class="f-title" data-q="title" placeholder="新しいタスクを入力して Enter" value="${esc(quickDraft.title)}"><span class="qPending">未登録 — Enterで追加</span></div></td>
     <td><input type="text" class="f-assignee" data-q="assignee" placeholder="自分" value="${esc(quickDraft.assignee)}"></td>
     <td><input type="text" class="f-memo" data-q="memo" placeholder="メモ" value="${esc(quickDraft.memo)}"></td>
     <td><input type="text" class="f-effort" data-q="effort" value="${esc(quickDraft.effort)}"></td>
@@ -1252,10 +1264,12 @@ function buildQuickRow(){
     inp.addEventListener('input', e => {
       if(addingQuick || !inp.isConnected) return;
       quickDraft[f] = e.target.value;
+      updateQuickPending();
     });
     inp.addEventListener('change', e => {
       if(addingQuick || !inp.isConnected) return;
       quickDraft[f] = e.target.value;
+      updateQuickPending();
       if(inp.classList.contains('dateInput')) render();
     });
     inp.addEventListener('keydown', e => {
@@ -1275,9 +1289,11 @@ function buildQuickRow(){
       quickDraft.priority = v;
       e.target.textContent = v === '' ? 'ー' : v;
       e.target.classList.toggle('has', v !== '');
+      updateQuickPending();
     });
   });
   tr.querySelector('.qAdd').addEventListener('click', addQuickTask);
+  if(quickHasDraft()) tr.classList.add('pending');
   return tr;
 }
 
@@ -1293,6 +1309,15 @@ function openPriPopover(anchor, cb){
   pop.style.top = (r.bottom + h + 8 > window.innerHeight ? r.top - h - 6 : r.bottom + 6) + 'px';
 }
 function closePriPopover(){ $('priPop').style.display = 'none'; priPopCb = null; }
+function quickHasDraft(){
+  return !!((quickDraft.title || '').trim() || (quickDraft.memo || '').trim()
+    || (quickDraft.assignee || '').trim() || (quickDraft.effort || '').trim()
+    || quickDraft.startDate || quickDraft.endDate || quickDraft.priority !== '');
+}
+function updateQuickPending(){
+  const tr = document.querySelector('tr.quickAdd');
+  if(tr) tr.classList.toggle('pending', quickHasDraft());
+}
 function addQuickTask(){
   const title = (quickDraft.title || '').trim();
   if(!title) return;
