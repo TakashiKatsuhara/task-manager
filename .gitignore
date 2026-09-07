@@ -2,3 +2,5 @@
 *.xls
 *.csv
 tasks*.json
+CLAUDE.md
+.claude/
