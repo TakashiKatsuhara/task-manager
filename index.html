@@ -1483,6 +1483,7 @@ function ghHeaders(cfg){
 function ghUrl(cfg){
   return `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/contents/${cfg.path}`;
 }
+const APP_SIG = 'task-manager'; // 同期データの署名（別アプリのデータとの混在防止）
 async function ghGet(cfg){
   const res = await fetch(`${ghUrl(cfg)}?ref=${encodeURIComponent(cfg.branch)}`, { headers: ghHeaders(cfg), cache: 'no-store' });
   if(res.status === 404) return { data: null, sha: null };
@@ -1490,6 +1491,10 @@ async function ghGet(cfg){
   const j = await res.json();
   let data = null;
   try{ data = JSON.parse(b64decode(j.content)); }catch(e){ data = null; }
+  if(data && data.app !== APP_SIG){
+    const e = new Error('同期先のデータは個人タスク管理のものではありません。設定のリポジトリとトークンを確認してください（同期を中止しました）');
+    throw e;
+  }
   return { data, sha: j.sha };
 }
 async function ghPut(cfg, dataObj, sha){
@@ -1533,7 +1538,7 @@ function refreshNoteInputs(){
     if(el && document.activeElement !== el) el.value = appNotes[k] || '';
   }
 }
-function syncDoc(){ return { tasks, settings: appSettings, notes: appNotes, savedAt: nowIso() }; }
+function syncDoc(){ return { app: APP_SIG, tasks, settings: appSettings, notes: appNotes, savedAt: nowIso() }; }
 function setSyncStatus(text, cls){
   const el = $('syncStatus');
   el.textContent = text;
