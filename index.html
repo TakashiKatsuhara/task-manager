@@ -225,6 +225,19 @@
   @media (prefers-color-scheme: dark){ .qPending{color:#d9a84e;} }
   tr.quickAdd.pending .qPending{display:inline-block;}
   tr.quickAdd.pending .qAdd{background:var(--accent); color:#fff; border-radius:7px; padding:3px 11px;}
+  /* サブ業務（親子タスク） */
+  .titleWrap{display:flex; align-items:center; gap:5px;}
+  .titleWrap .f-title{flex:1; min-width:0;}
+  .twist{border:none; background:none; cursor:pointer; color:var(--sub); font-size:11px; padding:2px 4px; border-radius:5px; line-height:1;}
+  .twist:hover{background:var(--line); color:var(--text);}
+  .subMark{color:var(--sub); font-size:11px; padding-left:16px; flex:none;}
+  tr.subRow .f-title{font-size:13px;}
+  .kidCount{font-size:10.5px; color:var(--sub); background:var(--bg); border:0.5px solid var(--line); border-radius:99px; padding:1px 7px; white-space:nowrap; flex:none;}
+  .kidCount.alldone{color:#4a9d6b; border-color:#4a9d6b55;}
+  .subAddBtn{font-weight:700;}
+  .card.subCard{margin-left:18px;}
+  .cardTwist{font-size:12px; padding:2px 6px;}
+  .gLabel .subMark{padding-left:8px;}
   th.edit, td.edit{width:58px; white-space:nowrap;}
   .cardMemo{color:var(--memo) !important;}
 
@@ -489,6 +502,10 @@
     <div class="formRow">
       <label>タイトル *</label>
       <input type="text" id="f_title">
+    </div>
+    <div class="formRow">
+      <label>親タスク（他のタスクのサブ業務にする場合に選択）</label>
+      <select id="f_parent"><option value="">なし（通常タスク）</option></select>
     </div>
     <div class="formGrid3">
       <div class="formRow">
@@ -771,6 +788,9 @@ let quickDraft = { doDate: '', startDate: '', endDate: '', priority: '', title: 
 let addingQuick = false;
 let lastEditedId = null;
 let orderCache = []; // 前回表示時の並び順（インライン編集中は行を動かさないために保持）
+let collapsedIds = new Set(); // 折りたたみ中の親タスクid
+try{ collapsedIds = new Set(JSON.parse(localStorage.getItem('tm_collapsed') || '[]')); }catch(e){}
+let rowMeta = new Map(); // 表示行の親子メタ（visibleTasksで再計算）
 let appNotes = { morning: '', evening: '', other: '', updatedAt: null };
 const NOTE_FIELDS = { morning: 'note_morning', evening: 'note_evening', other: 'note_other' };
 const LS_NOTES = 'tm_notes';
@@ -873,6 +893,10 @@ function freqLabel(task){
 function toggleDone(id, checked){
   const t = tasks.find(x => x.id === id);
   if(!t) return;
+  if(checked){
+    const open = subTasksOf(id).filter(k => !k.done);
+    if(open.length && !confirm(`未完了のサブ業務が${open.length}件残っています。このタスクを完了にしますか？\n（サブ業務はそのまま残ります）`)){ render(); return; }
+  }
   undoSnapshot = JSON.parse(JSON.stringify(t));
   if(t.kind === 'recurring'){
     if(!checked) return;
@@ -975,7 +999,63 @@ function visibleTasks(preserveOrder){
     (t.title || '').toLowerCase().includes(q) ||
     (t.memo || '').toLowerCase().includes(q) ||
     (t.assignee || '').toLowerCase().includes(q));
+  if(currentFilter !== 'done') list = groupForDisplay(list);
+  else rowMeta = new Map();
   return list;
+}
+
+/* ================= サブ業務（親子タスク） ================= */
+function subTasksOf(id){ return tasks.filter(x => !x.deleted && x.parentId === id); }
+function isSubTask(t){
+  if(!t.parentId) return false;
+  const p = tasks.find(x => x.id === t.parentId);
+  return !!(p && !p.deleted);
+}
+function saveCollapsed(){ localStorage.setItem('tm_collapsed', JSON.stringify([...collapsedIds])); }
+function toggleCollapse(id){
+  collapsedIds.has(id) ? collapsedIds.delete(id) : collapsedIds.add(id);
+  saveCollapsed();
+  render(true);
+}
+function addSubTask(pid){
+  const p = tasks.find(x => x.id === pid);
+  if(!p || isSubTask(p)) return; // 2階層目は作らない
+  collapsedIds.delete(pid); saveCollapsed();
+  const nt = { id: uid(), title: '', doDate: null, startDate: null, endDate: null, priority: '',
+    kind: 'single', freq: null, freqDay: null, freqInterval: null, holidayAdj: null,
+    effort: '', assignee: '', memo: '', done: false, doneDate: null, lastDone: null, doneCount: 0,
+    deleted: false, parentId: pid, updatedAt: nowIso() };
+  tasks.push(nt);
+  lastEditedId = nt.id;
+  markDirty(); render(true);
+  const inp = document.querySelector(`tr[data-id="${nt.id}"] .f-title`);
+  if(inp) inp.focus();
+}
+// フィルタ・ソート済みのフラットなリストを「親→サブ」のグループ順に並べ替える
+function groupForDisplay(list){
+  rowMeta = new Map();
+  const live = new Map(tasks.filter(x => !x.deleted).map(x => [x.id, x]));
+  const kidsBy = new Map();
+  const tops = [];
+  const seen = new Set();
+  const pushTop = p => { if(!seen.has(p.id)){ seen.add(p.id); tops.push(p); } };
+  for(const t of list){
+    const p = t.parentId ? live.get(t.parentId) : null;
+    if(p){
+      pushTop(p); // サブが条件に合えば親も文脈として表示
+      if(!kidsBy.has(p.id)) kidsBy.set(p.id, []);
+      kidsBy.get(p.id).push(t);
+    } else pushTop(t);
+  }
+  const out = [];
+  for(const p of tops){
+    const kids = kidsBy.get(p.id) || [];
+    const all = subTasksOf(p.id);
+    rowMeta.set(p.id, { sub: false, kidsAll: all.length, kidsDone: all.filter(k => k.done).length });
+    out.push(p);
+    if(!collapsedIds.has(p.id)) for(const k of kids){ rowMeta.set(k.id, { sub: true }); out.push(k); }
+  }
+  return out;
 }
 
 function badges(t){
@@ -1055,7 +1135,9 @@ function render(preserveOrder){
 
     // --- table row（インライン編集） ---
     const tr = document.createElement('tr');
-    tr.className = cls + (t.id === lastEditedId ? ' flash' : '');
+    const m = rowMeta.get(t.id) || {};
+    tr.className = cls + (m.sub ? ' subRow' : '') + (t.id === lastEditedId ? ' flash' : '');
+    tr.dataset.id = t.id;
     tr.innerHTML = `
       <td class="chk"><input type="checkbox" class="rnd" title="完了" ${t.done ? 'checked' : ''}></td>
       ${dateCell('doDate', t.doDate, 'dc-do')}
@@ -1063,12 +1145,12 @@ function render(preserveOrder){
       ${dateCell('endDate', t.endDate, '', dlOver)}
       <td><button class="priBtn${t.priority === '' || t.priority == null ? '' : ' has'}" title="優先度を選択">${t.priority === '' || t.priority == null ? 'ー' : esc(t.priority)}</button></td>
       <td style="white-space:nowrap">${badges(t)}</td>
-      <td><input type="text" class="f-title" data-field="title" value="${esc(t.title)}">${lastDone}</td>
+      <td><div class="titleWrap">${m.sub ? '<span class="subMark">└</span>' : ''}${m.kidsAll ? `<button class="twist" title="サブ業務を開閉">${collapsedIds.has(t.id) ? '▸' : '▾'}</button>` : ''}<input type="text" class="f-title" data-field="title" value="${esc(t.title)}" ${m.sub ? 'placeholder="サブ業務名を入力"' : ''}>${m.kidsAll ? `<span class="kidCount${m.kidsDone === m.kidsAll ? ' alldone' : ''}" title="サブ業務の完了状況">${m.kidsDone}/${m.kidsAll}</span>` : ''}</div>${lastDone}</td>
       <td><input type="text" class="f-assignee" data-field="assignee" value="${esc(t.assignee || '')}" placeholder="自分"></td>
       <td><input type="text" class="f-memo" data-field="memo" value="${esc(t.memo || '')}"></td>
       <td><input type="text" class="f-effort" data-field="effort" value="${esc(t.effort || '')}"></td>
       <td class="sel"><input type="checkbox" class="selBox" title="選択（一括日付変更用）" ${selectedIds.has(t.id) ? 'checked' : ''}></td>
-      <td class="edit"><button class="editBtn dupBtn" title="複製">⧉</button><button class="editBtn" title="詳細編集">✎</button></td>`;
+      <td class="edit">${m.sub ? '' : '<button class="editBtn subAddBtn" title="サブ業務を追加">＋</button>'}<button class="editBtn dupBtn" title="複製">⧉</button><button class="editBtn" title="詳細編集">✎</button></td>`;
     tr.querySelector('td.sel input').addEventListener('change', e => {
       selectedIds[e.target.checked ? 'add' : 'delete'](t.id);
       syncSelAll();
@@ -1089,12 +1171,16 @@ function render(preserveOrder){
       openPriPopover(e.target, v => updateField(t.id, 'priority', v));
     });
     tr.querySelector('.dupBtn').addEventListener('click', () => duplicateTask(t.id));
-    tr.querySelector('.editBtn:not(.dupBtn)').addEventListener('click', () => openTaskModal(t.id));
+    const tw = tr.querySelector('.twist');
+    if(tw) tw.addEventListener('click', e => { e.stopPropagation(); toggleCollapse(t.id); });
+    const sab = tr.querySelector('.subAddBtn');
+    if(sab) sab.addEventListener('click', () => addSubTask(t.id));
+    tr.querySelector('.editBtn:not(.dupBtn):not(.subAddBtn)').addEventListener('click', () => openTaskModal(t.id));
     tbody.appendChild(tr);
 
     // --- mobile card ---
     const card = document.createElement('div');
-    card.className = `card ${cls}`;
+    card.className = `card ${cls}${m.sub ? ' subCard' : ''}`;
     const meta = [];
     if(t.endDate) meta.push(`〆 ${esc(fmtMD(t.endDate))}`);
     if(t.priority !== '' && t.priority != null) meta.push(`優先${esc(t.priority)}`);
@@ -1102,9 +1188,9 @@ function render(preserveOrder){
     card.innerHTML = `
       <input type="checkbox" class="rnd" ${t.done ? 'checked' : ''}>
       <div class="cardBody">
-        <div class="cardTitle">${esc(t.title)}</div>
+        <div class="cardTitle">${m.kidsAll ? `<button class="twist cardTwist">${collapsedIds.has(t.id) ? '▸' : '▾'}</button>` : ''}${m.sub ? '<span class="subMark">└</span> ' : ''}${esc(t.title)}</div>
         ${t.doDate ? `<span class="cardDate">${esc(fmtMD(t.doDate))}</span>` : ''}
-        <div class="cardMeta">${badges(t)} ${ballBadge} ${meta.map(m => `<span>${m}</span>`).join('')}</div>
+        <div class="cardMeta">${badges(t)} ${m.kidsAll ? `<span class="kidCount${m.kidsDone === m.kidsAll ? ' alldone' : ''}">${m.kidsDone}/${m.kidsAll}</span>` : ''} ${ballBadge} ${meta.map(x => `<span>${x}</span>`).join('')}</div>
         ${t.memo ? `<div class="cardMemo">${esc(t.memo)}</div>` : ''}
         ${lastDone}
       </div>
@@ -1115,6 +1201,8 @@ function render(preserveOrder){
       syncSelAll();
       updateBulkBar();
     });
+    const ctw = card.querySelector('.cardTwist');
+    if(ctw) ctw.addEventListener('click', e => { e.stopPropagation(); toggleCollapse(t.id); });
     card.addEventListener('click', e => { if(e.target.type !== 'checkbox') openTaskModal(t.id); });
     cards.appendChild(card);
   }
@@ -1178,7 +1266,7 @@ function renderGantt(list){
     }
     const ballBadge = (t.assignee || '').trim() ? `<span class="badge ball">🏐 ${esc(t.assignee)}</span>` : '';
     rows += `<div class="gRow" style="height:${G_ROWH}px; width:${totalW}px">
-      <div class="gLabel" data-id="${t.id}" title="${esc(t.title)}">${badges(t)}<span class="tt">${esc(t.title)}</span>${ballBadge}</div>
+      <div class="gLabel" data-id="${t.id}" title="${esc(t.title)}">${(rowMeta.get(t.id) || {}).sub ? '<span class="subMark">└</span>' : ''}${badges(t)}<span class="tt">${esc(t.title)}</span>${ballBadge}</div>
       ${bar}${dot}
     </div>`;
   }
@@ -1231,10 +1319,15 @@ function bulkApplyDate(){
 function bulkDelete(){
   if(!selectedIds.size) return;
   const n = selectedIds.size;
-  if(!confirm(`選択した${n}件のタスクを削除しますか？`)) return;
+  let extraKids = 0;
+  for(const id of selectedIds) extraKids += subTasksOf(id).filter(k => !selectedIds.has(k.id)).length;
+  if(!confirm(`選択した${n}件のタスク${extraKids ? `（サブ業務${extraKids}件を含む）` : ''}を削除しますか？`)) return;
   for(const id of selectedIds){
     const t = tasks.find(x => x.id === id);
-    if(t){ t.deleted = true; t.updatedAt = nowIso(); }
+    if(t){
+      t.deleted = true; t.updatedAt = nowIso();
+      for(const k of subTasksOf(t.id)){ k.deleted = true; k.updatedAt = nowIso(); }
+    }
   }
   selectedIds.clear();
   markDirty(); render();
@@ -1377,6 +1470,18 @@ function openTaskModal(id){
   $('btnDelete').style.display = t ? 'inline-block' : 'none';
   $('btnDup').style.display = t ? 'inline-block' : 'none';
   $('f_title').value = t ? t.title : '';
+  const pSel = $('f_parent');
+  const hasKids = t ? subTasksOf(t.id).length > 0 : false;
+  let pOpts = tasks.filter(x => !x.deleted && !x.done && !x.parentId && (!t || x.id !== t.id));
+  if(t?.parentId && !pOpts.some(x => x.id === t.parentId)){
+    const cur = tasks.find(x => x.id === t.parentId && !x.deleted);
+    if(cur) pOpts = [cur, ...pOpts];
+  }
+  pSel.innerHTML = '<option value="">なし（通常タスク）</option>' +
+    pOpts.map(x => `<option value="${x.id}">${esc(x.title)}</option>`).join('');
+  pSel.value = (t?.parentId && pOpts.some(x => x.id === t.parentId)) ? t.parentId : '';
+  pSel.disabled = hasKids;
+  pSel.title = hasKids ? 'サブ業務を持つタスクは、他のタスクのサブにはできません' : '';
   $('f_doDate').value = t ? (t.doDate || '') : todayStr();
   $('f_startDate').value = t?.startDate || '';
   $('f_endDate').value = t?.endDate || '';
@@ -1418,6 +1523,7 @@ function saveTask(){
     effort: $('f_effort').value.trim(),
     assignee: $('f_assignee').value.trim(),
     memo: $('f_memo').value,
+    ...($('f_parent').disabled ? {} : { parentId: $('f_parent').value || null }),
     updatedAt: nowIso()
   };
   if(editingId){
@@ -1437,6 +1543,14 @@ function duplicateTask(id){
   copy.deleted = false;
   copy.updatedAt = nowIso();
   tasks.push(copy);
+  const dupKids = subTasksOf(id);
+  for(const k of dupKids){
+    const kc = JSON.parse(JSON.stringify(k));
+    kc.id = uid(); kc.parentId = copy.id;
+    kc.done = false; kc.doneDate = null; kc.lastDone = null; kc.doneCount = 0;
+    kc.deleted = false; kc.updatedAt = nowIso();
+    tasks.push(kc);
+  }
   markDirty();
   closeTaskModal();
   render();
@@ -1445,9 +1559,11 @@ function duplicateTask(id){
 }
 function deleteTask(){
   if(!editingId) return;
-  if(!confirm('このタスクを削除しますか？')) return;
+  const delKids = subTasksOf(editingId);
+  if(!confirm(delKids.length ? `このタスクとサブ業務${delKids.length}件を削除しますか？` : 'このタスクを削除しますか？')) return;
   const t = tasks.find(x => x.id === editingId);
   t.deleted = true; t.updatedAt = nowIso();
+  for(const k of delKids){ k.deleted = true; k.updatedAt = nowIso(); }
   closeTaskModal(); markDirty(); render();
 }
 $('f_holidayAdj').addEventListener('change', () => { adjTouched = true; });
