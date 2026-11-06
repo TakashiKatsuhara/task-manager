@@ -190,6 +190,7 @@
   .lastDone{font-size:10.5px; color:var(--sub); margin-top:2px;}
   .editBtn{border:none; background:transparent; color:#c0c0c6; cursor:pointer; font-size:13px; padding:3px 5px; border-radius:7px; transition:all .15s;}
   .editBtn:hover{background:var(--seg-bg); color:var(--text);}
+  td.edit .editBtn{padding:3px 2px; font-size:12px;} /* fixedレイアウトで列が縮んでも3個収まる幅 */
 
   /* メモタブ */
   #notesWrap{display:none; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:14px;}
@@ -1184,7 +1185,7 @@ function render(preserveOrder){
       ${dateCell('endDate', t.endDate, '', dlOver)}
       <td><button class="priBtn${t.priority === '' || t.priority == null ? '' : ' has'}" title="優先度を選択">${t.priority === '' || t.priority == null ? 'ー' : esc(t.priority)}</button></td>
       <td style="white-space:nowrap">${badges(t)}</td>
-      <td><div class="titleWrap"><span class="dragHandle" draggable="true" title="ドラッグして他のタスクの行に重ねるとサブ業務になります">⠿</span>${m.sub ? '<span class="subMark">└</span>' : ''}${m.kidsAll ? `<button class="twist" title="サブ業務を開閉">${collapsedIds.has(t.id) ? '▸' : '▾'}</button>` : ''}<input type="text" class="f-title" data-field="title" value="${esc(t.title)}" ${m.sub ? 'placeholder="サブ業務名を入力"' : ''}>${m.kidsAll ? `<span class="kidCount${m.kidsDone === m.kidsAll ? ' alldone' : ''}" title="サブ業務の完了状況">${m.kidsDone}/${m.kidsAll}</span>` : ''}</div>${lastDone}</td>
+      <td><div class="titleWrap"><span class="dragHandle" title="ドラッグして他のタスクの行に重ねるとサブ業務になります">⠿</span>${m.sub ? '<span class="subMark">└</span>' : ''}${m.kidsAll ? `<button class="twist" title="サブ業務を開閉">${collapsedIds.has(t.id) ? '▸' : '▾'}</button>` : ''}<input type="text" class="f-title" data-field="title" value="${esc(t.title)}" ${m.sub ? 'placeholder="サブ業務名を入力"' : ''}>${m.kidsAll ? `<span class="kidCount${m.kidsDone === m.kidsAll ? ' alldone' : ''}" title="サブ業務の完了状況">${m.kidsDone}/${m.kidsAll}</span>` : ''}</div>${lastDone}</td>
       <td><input type="text" class="f-assignee" data-field="assignee" value="${esc(t.assignee || '')}" placeholder="自分"></td>
       <td><input type="text" class="f-memo" data-field="memo" value="${esc(t.memo || '')}"></td>
       <td><input type="text" class="f-effort" data-field="effort" value="${esc(t.effort || '')}"></td>
@@ -1215,13 +1216,19 @@ function render(preserveOrder){
     const sab = tr.querySelector('.subAddBtn');
     if(sab) sab.addEventListener('click', () => addSubTask(t.id));
     const dh = tr.querySelector('.dragHandle');
-    dh.addEventListener('dragstart', e => {
+    // ハンドルを掴んだときだけ行全体をドラッグ可能にする（入力欄の文字選択と両立させるため）
+    dh.addEventListener('mousedown', () => { tr.draggable = true; });
+    dh.addEventListener('mouseup', () => { tr.draggable = false; });
+    tr.addEventListener('dragstart', e => {
+      if(!tr.draggable){ e.preventDefault(); return; }
       dragSrcId = t.id;
       e.dataTransfer.effectAllowed = 'move';
       try{ e.dataTransfer.setData('text/plain', t.id); }catch(err){}
-      tr.classList.add('dragging');
+      // ゴースト画像の確定後に元の行を薄くする
+      requestAnimationFrame(() => tr.classList.add('dragging'));
     });
-    dh.addEventListener('dragend', () => {
+    tr.addEventListener('dragend', () => {
+      tr.draggable = false;
       dragSrcId = null;
       tr.classList.remove('dragging');
       document.querySelectorAll('.dropTarget').forEach(x => x.classList.remove('dropTarget'));
