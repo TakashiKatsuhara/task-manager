@@ -1071,10 +1071,12 @@ function groupForDisplay(list, resortKids){
   const tops = [];
   const seen = new Set();
   const pushTop = p => { if(!seen.has(p.id)){ seen.add(p.id); tops.push(p); } };
+  const inList = new Set(list.map(x => x.id));
   for(const t of list){
     const p = t.parentId ? live.get(t.parentId) : null;
     if(p){
-      pushTop(p); // サブが条件に合えば親も文脈として表示
+      // 親自身もリストにいる場合は親の並び位置を使う（サブの位置に引きずられない）
+      if(!inList.has(p.id)) pushTop(p); // 親がフィルタ外のときだけサブの位置に文脈として挿入
       if(!kidsBy.has(p.id)) kidsBy.set(p.id, []);
       kidsBy.get(p.id).push(t);
     } else pushTop(t);
