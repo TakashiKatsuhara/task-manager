@@ -108,7 +108,7 @@
   tbody tr:last-child td{border-bottom:none;}
   tbody tr:hover td{background:rgba(125,125,135,.05);}
   td.chk, th.chk{width:44px; text-align:center; padding-left:16px;}
-  th.edit, td.edit{width:40px; text-align:center;}
+  th.edit, td.edit{width:84px; text-align:center; white-space:nowrap;}
 
   /* 状態別のごく淡いトーン */
   tr.overdue td{background:var(--red-row);}
@@ -238,7 +238,12 @@
   .card.subCard{margin-left:18px;}
   .cardTwist{font-size:12px; padding:2px 6px;}
   .gLabel .subMark{padding-left:8px;}
-  th.edit, td.edit{width:58px; white-space:nowrap;}
+  .dragHandle{cursor:grab; color:var(--sub); opacity:.25; font-size:12px; padding:0 2px; flex:none; user-select:none; transition:opacity .15s;}
+  tbody tr:hover .dragHandle{opacity:.8;}
+  .dragHandle:active{cursor:grabbing;}
+  tr.dragging td{opacity:.45;}
+  tr.dropTarget td{background:rgba(85,100,125,.12) !important;}
+  th.edit, td.edit{width:84px; white-space:nowrap;}
   .cardMemo{color:var(--memo) !important;}
 
   #cards{display:none;}
@@ -446,7 +451,7 @@
     <button class="chip" data-view="notes" onclick="setView(this)">📝 メモ</button>
   </div>
   <div class="seg">
-    <button class="chip" onclick="render()" title="いつ→優先→担当→タイトル順に並べ替え">⇅ 並べ替え</button>
+    <button class="chip" onclick="render()" title="いつ→優先→担当→タイトル順に並べ替え（サブ業務は親の中で優先度順）">⇅ 並べ替え</button>
   </div>
   <input id="searchBox" type="text" placeholder="🔍 検索" oninput="render(true)">
 </div>
@@ -791,6 +796,7 @@ let orderCache = []; // 前回表示時の並び順（インライン編集中�
 let collapsedIds = new Set(); // 折りたたみ中の親タスクid
 try{ collapsedIds = new Set(JSON.parse(localStorage.getItem('tm_collapsed') || '[]')); }catch(e){}
 let rowMeta = new Map(); // 表示行の親子メタ（visibleTasksで再計算）
+let dragSrcId = null; // ドラッグ中のタスクid
 let appNotes = { morning: '', evening: '', other: '', updatedAt: null };
 const NOTE_FIELDS = { morning: 'note_morning', evening: 'note_evening', other: 'note_other' };
 const LS_NOTES = 'tm_notes';
@@ -967,6 +973,7 @@ function rowClass(t){
 }
 
 function visibleTasks(preserveOrder){
+  const resortKids = !(preserveOrder && orderCache.length); // ⇅並べ替え・初期表示のときだけサブを優先度順に
   const q = $('searchBox').value.trim().toLowerCase();
   const today = todayStr();
   let list = tasks.filter(t => !t.deleted);
@@ -999,7 +1006,7 @@ function visibleTasks(preserveOrder){
     (t.title || '').toLowerCase().includes(q) ||
     (t.memo || '').toLowerCase().includes(q) ||
     (t.assignee || '').toLowerCase().includes(q));
-  if(currentFilter !== 'done') list = groupForDisplay(list);
+  if(currentFilter !== 'done') list = groupForDisplay(list, resortKids);
   else rowMeta = new Map();
   return list;
 }
@@ -1031,8 +1038,32 @@ function addSubTask(pid){
   const inp = document.querySelector(`tr[data-id="${nt.id}"] .f-title`);
   if(inp) inp.focus();
 }
+// ドロップ先がtargetIdの行のとき、srcの新しい親になるタスクid（不可ならnull）
+function dropParentFor(targetId){
+  if(!dragSrcId || dragSrcId === targetId) return null;
+  const src = tasks.find(x => x.id === dragSrcId);
+  if(!src) return null;
+  if(subTasksOf(src.id).length) return null; // サブ業務を持つ親はネストできない（1階層）
+  const tgt = tasks.find(x => x.id === targetId);
+  if(!tgt || tgt.deleted) return null;
+  const pid = isSubTask(tgt) ? tgt.parentId : tgt.id;
+  if(pid === src.id || pid === src.parentId) return null;
+  return pid;
+}
+function dropOnTask(targetId){
+  const pid = dropParentFor(targetId);
+  if(!pid) return;
+  const src = tasks.find(x => x.id === dragSrcId);
+  const p = tasks.find(x => x.id === pid);
+  src.parentId = pid;
+  src.updatedAt = nowIso();
+  collapsedIds.delete(pid); saveCollapsed();
+  dragSrcId = null;
+  markDirty(); render(true);
+  showToast(`「${p.title}」のサブ業務にしました`);
+}
 // フィルタ・ソート済みのフラットなリストを「親→サブ」のグループ順に並べ替える
-function groupForDisplay(list){
+function groupForDisplay(list, resortKids){
   rowMeta = new Map();
   const live = new Map(tasks.filter(x => !x.deleted).map(x => [x.id, x]));
   const kidsBy = new Map();
@@ -1050,6 +1081,14 @@ function groupForDisplay(list){
   const out = [];
   for(const p of tops){
     const kids = kidsBy.get(p.id) || [];
+    if(resortKids && kids.length > 1) kids.sort((a,b) => {
+      const pa = a.priority === '' || a.priority == null ? 999 : Number(a.priority);
+      const pb = b.priority === '' || b.priority == null ? 999 : Number(b.priority);
+      if(pa !== pb) return pa - pb;
+      const da = a.doDate || '9999-12-31', db = b.doDate || '9999-12-31';
+      if(da !== db) return da.localeCompare(db);
+      return (a.title || '').localeCompare(b.title || '', 'ja');
+    });
     const all = subTasksOf(p.id);
     rowMeta.set(p.id, { sub: false, kidsAll: all.length, kidsDone: all.filter(k => k.done).length });
     out.push(p);
@@ -1145,7 +1184,7 @@ function render(preserveOrder){
       ${dateCell('endDate', t.endDate, '', dlOver)}
       <td><button class="priBtn${t.priority === '' || t.priority == null ? '' : ' has'}" title="優先度を選択">${t.priority === '' || t.priority == null ? 'ー' : esc(t.priority)}</button></td>
       <td style="white-space:nowrap">${badges(t)}</td>
-      <td><div class="titleWrap">${m.sub ? '<span class="subMark">└</span>' : ''}${m.kidsAll ? `<button class="twist" title="サブ業務を開閉">${collapsedIds.has(t.id) ? '▸' : '▾'}</button>` : ''}<input type="text" class="f-title" data-field="title" value="${esc(t.title)}" ${m.sub ? 'placeholder="サブ業務名を入力"' : ''}>${m.kidsAll ? `<span class="kidCount${m.kidsDone === m.kidsAll ? ' alldone' : ''}" title="サブ業務の完了状況">${m.kidsDone}/${m.kidsAll}</span>` : ''}</div>${lastDone}</td>
+      <td><div class="titleWrap"><span class="dragHandle" draggable="true" title="ドラッグして他のタスクの行に重ねるとサブ業務になります">⠿</span>${m.sub ? '<span class="subMark">└</span>' : ''}${m.kidsAll ? `<button class="twist" title="サブ業務を開閉">${collapsedIds.has(t.id) ? '▸' : '▾'}</button>` : ''}<input type="text" class="f-title" data-field="title" value="${esc(t.title)}" ${m.sub ? 'placeholder="サブ業務名を入力"' : ''}>${m.kidsAll ? `<span class="kidCount${m.kidsDone === m.kidsAll ? ' alldone' : ''}" title="サブ業務の完了状況">${m.kidsDone}/${m.kidsAll}</span>` : ''}</div>${lastDone}</td>
       <td><input type="text" class="f-assignee" data-field="assignee" value="${esc(t.assignee || '')}" placeholder="自分"></td>
       <td><input type="text" class="f-memo" data-field="memo" value="${esc(t.memo || '')}"></td>
       <td><input type="text" class="f-effort" data-field="effort" value="${esc(t.effort || '')}"></td>
@@ -1175,6 +1214,23 @@ function render(preserveOrder){
     if(tw) tw.addEventListener('click', e => { e.stopPropagation(); toggleCollapse(t.id); });
     const sab = tr.querySelector('.subAddBtn');
     if(sab) sab.addEventListener('click', () => addSubTask(t.id));
+    const dh = tr.querySelector('.dragHandle');
+    dh.addEventListener('dragstart', e => {
+      dragSrcId = t.id;
+      e.dataTransfer.effectAllowed = 'move';
+      try{ e.dataTransfer.setData('text/plain', t.id); }catch(err){}
+      tr.classList.add('dragging');
+    });
+    dh.addEventListener('dragend', () => {
+      dragSrcId = null;
+      tr.classList.remove('dragging');
+      document.querySelectorAll('.dropTarget').forEach(x => x.classList.remove('dropTarget'));
+    });
+    tr.addEventListener('dragover', e => {
+      if(dropParentFor(t.id)){ e.preventDefault(); e.dataTransfer.dropEffect = 'move'; tr.classList.add('dropTarget'); }
+    });
+    tr.addEventListener('dragleave', () => tr.classList.remove('dropTarget'));
+    tr.addEventListener('drop', e => { e.preventDefault(); tr.classList.remove('dropTarget'); dropOnTask(t.id); });
     tr.querySelector('.editBtn:not(.dupBtn):not(.subAddBtn)').addEventListener('click', () => openTaskModal(t.id));
     tbody.appendChild(tr);
 
@@ -1386,6 +1442,22 @@ function buildQuickRow(){
     });
   });
   tr.querySelector('.qAdd').addEventListener('click', addQuickTask);
+  // サブ業務をこの行にドロップすると通常タスクに戻す
+  tr.addEventListener('dragover', e => {
+    const src = dragSrcId && tasks.find(x => x.id === dragSrcId);
+    if(src && src.parentId){ e.preventDefault(); e.dataTransfer.dropEffect = 'move'; tr.classList.add('dropTarget'); }
+  });
+  tr.addEventListener('dragleave', () => tr.classList.remove('dropTarget'));
+  tr.addEventListener('drop', e => {
+    e.preventDefault(); tr.classList.remove('dropTarget');
+    const src = dragSrcId && tasks.find(x => x.id === dragSrcId);
+    if(src && src.parentId){
+      src.parentId = null; src.updatedAt = nowIso();
+      dragSrcId = null;
+      markDirty(); render(true);
+      showToast('↩ サブ業務から通常タスクに戻しました');
+    }
+  });
   if(quickHasDraft()) tr.classList.add('pending');
   return tr;
 }
